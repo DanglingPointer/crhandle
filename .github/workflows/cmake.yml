@@ -25,7 +25,7 @@ jobs:
         - os: ubuntu-latest
           compiler: clang++-12
 
-#        - os: windows-latest
+        - os: windows-latest
 
     steps:
     - uses: actions/checkout@v2
