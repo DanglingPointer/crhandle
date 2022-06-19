@@ -3,6 +3,8 @@
 #include "crhandle/task.hpp"
 #include "crhandle/taskowner.hpp"
 
+#include <optional>
+
 namespace {
 
 struct TaskOwnerFixture : public ::testing::Test

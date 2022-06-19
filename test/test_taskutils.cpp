@@ -2,6 +2,8 @@
 #include "crhandle/task.hpp"
 #include "crhandle/taskutils.hpp"
 
+#include <optional>
+
 namespace {
 
 struct TaskUtilsFixture : public ::testing::Test

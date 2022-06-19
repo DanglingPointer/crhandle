@@ -23,4 +23,10 @@ target_link_libraries(crhandletests
         )
 
 include(GoogleTest)
-gtest_discover_tests(crhandletests)
+
+if(MSVC)
+    gtest_discover_tests(crhandletests
+            TEST_FILTER -*anyof*)
+else()
+    gtest_discover_tests(crhandletests)
+endif()
