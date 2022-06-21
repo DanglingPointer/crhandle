@@ -1,4 +1,6 @@
+#undef NDEBUG
 #include <gtest/gtest.h>
+
 #include "crhandle/task.hpp"
 #include "crhandle/taskutils.hpp"
 
