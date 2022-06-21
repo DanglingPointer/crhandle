@@ -349,7 +349,6 @@ TEST_F(UnichannelFixture, unichannel_immediate_honours_subscription_order)
    EXPECT_TRUE(done2);
 }
 
-
 TEST_F(UnichannelFixture, unichannel_stepwise_honours_subscription_order)
 {
    auto ch = StepwiseChannel::Make(GetExecutor());
@@ -392,6 +391,154 @@ TEST_F(UnichannelFixture, unichannel_stepwise_honours_subscription_order)
 
    EXPECT_FALSE(task1);
    EXPECT_FALSE(task2);
+}
+
+TEST_F(UnichannelFixture, unichannel_immediate_ignores_canceled_consumers)
+{
+   auto ch = ImmediateChannel::Make();
+   ImmediateChannel::Producer prod(ch);
+
+   int received1 = 0;
+   int received2 = 0;
+
+   static auto ReceiveOne = [](ImmediateChannel * ch, int & result) -> cr::TaskHandle<void> {
+      result = *co_await ch->Next();
+   };
+
+   auto task1 = ReceiveOne(ch.get(), received1);
+   task1.Run();
+
+   auto task2 = ReceiveOne(ch.get(), received2);
+   task2.Run();
+
+   task1 = {};
+
+   EXPECT_TRUE(prod.Send(std::make_unique<int>(42)));
+
+   EXPECT_EQ(0, received1);
+   EXPECT_EQ(42, received2);
+
+   EXPECT_FALSE(task1);
+   EXPECT_FALSE(task2);
+}
+
+TEST_F(UnichannelFixture, unichannel_stepwise_ignores_canceled_consumers)
+{
+   auto ch = StepwiseChannel::Make(GetExecutor());
+   StepwiseChannel::Producer prod(ch);
+
+   int received1 = 0;
+   int received2 = 0;
+
+   static auto ReceiveOne = [](StepwiseChannel * ch,
+                               int & result) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      result = *co_await ch->Next();
+   };
+
+   auto task1 = ReceiveOne(ch.get(), received1);
+   task1.Run(GetExecutor());
+
+   auto task2 = ReceiveOne(ch.get(), received2);
+   task2.Run(GetExecutor());
+
+   while (dispatcher.ProcessOneTask())
+      ;
+
+   task1 = {};
+
+   EXPECT_TRUE(prod.Send(std::make_unique<int>(42)));
+
+   while (dispatcher.ProcessOneTask())
+      ;
+
+   EXPECT_EQ(0, received1);
+   EXPECT_EQ(42, received2);
+
+   EXPECT_FALSE(task1);
+   EXPECT_FALSE(task2);
+}
+
+TEST_F(UnichannelFixture, unichannel_immediate_all_canceled_consumers)
+{
+   auto ch = ImmediateChannel::Make();
+   ImmediateChannel::Producer prod(ch);
+
+   int received1 = 0;
+   int received2 = 0;
+
+   static auto ReceiveOne = [](ImmediateChannel * ch, int & result) -> cr::TaskHandle<void> {
+      result = *co_await ch->Next();
+   };
+
+   auto task1 = ReceiveOne(ch.get(), received1);
+   task1.Run();
+
+   auto task2 = ReceiveOne(ch.get(), received2);
+   task2.Run();
+
+   task1 = {};
+   task2 = {};
+
+   EXPECT_TRUE(prod.Send(std::make_unique<int>(42)));
+
+   EXPECT_EQ(0, received1);
+   EXPECT_EQ(0, received2);
+
+   EXPECT_FALSE(task1);
+   EXPECT_FALSE(task2);
+
+   int received3 = 0;
+   auto task3 = ReceiveOne(ch.get(), received3);
+   task3.Run();
+
+   EXPECT_EQ(42, received3);
+   EXPECT_FALSE(task3);
+}
+
+TEST_F(UnichannelFixture, unichannel_stepwise_all_canceled_consumers)
+{
+   auto ch = StepwiseChannel::Make(GetExecutor());
+   StepwiseChannel::Producer prod(ch);
+
+   int received1 = 0;
+   int received2 = 0;
+
+   static auto ReceiveOne = [](StepwiseChannel * ch,
+                               int & result) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      result = *co_await ch->Next();
+   };
+
+   auto task1 = ReceiveOne(ch.get(), received1);
+   task1.Run(GetExecutor());
+
+   auto task2 = ReceiveOne(ch.get(), received2);
+   task2.Run(GetExecutor());
+
+   while (dispatcher.ProcessOneTask())
+      ;
+
+   task1 = {};
+   task2 = {};
+
+   EXPECT_TRUE(prod.Send(std::make_unique<int>(42)));
+
+   while (dispatcher.ProcessOneTask())
+      ;
+
+   EXPECT_EQ(0, received1);
+   EXPECT_EQ(0, received2);
+
+   EXPECT_FALSE(task1);
+   EXPECT_FALSE(task2);
+
+   int received3 = 0;
+   auto task3 = ReceiveOne(ch.get(), received3);
+   task3.Run(GetExecutor());
+   while (dispatcher.ProcessOneTask())
+      ;
+
+   EXPECT_EQ(42, received3);
+   EXPECT_FALSE(task3);
 }
 
 } // namespace

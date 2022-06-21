@@ -93,9 +93,12 @@ private:
       if (m_consumers.empty())
          return;
 
-      auto callback = m_consumers.front();
-      m_consumers.pop_front();
-      callback.resume();
+      assert(m_items.size() == 1);
+      while (!m_items.empty() && !m_consumers.empty()) {
+         auto handle = m_consumers.front();
+         m_consumers.pop_front();
+         handle.resume();
+      }
    }
 
    std::deque<stdcr::coroutine_handle<>> m_consumers;
