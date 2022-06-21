@@ -14,6 +14,7 @@ add_executable(crhandletests
         test_taskhandle.cpp
         test_taskowner.cpp
         test_taskutils.cpp
+        test_unichannel.cpp
         )
 
 target_link_libraries(crhandletests
