@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "crhandle/task.hpp"
 
+#include <deque>
 #include <optional>
 
 namespace {
@@ -398,13 +399,13 @@ struct ManualDispatcher
    {
       if (queue.empty())
          return false;
-      Task t = std::move(queue.back());
-      queue.pop_back();
+      Task t = std::move(queue.front());
+      queue.pop_front();
       t();
       return true;
    }
 
-   std::vector<Task> queue;
+   std::deque<Task> queue;
 };
 
 ManualDispatcher ManualDispatcher::s_instance;
