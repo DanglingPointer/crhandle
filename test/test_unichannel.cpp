@@ -24,11 +24,11 @@ TEST_F(UnichannelFixture, unichannel_immediate_send_then_receive)
 
    EXPECT_TRUE(prod.Send(std::make_unique<int>(42)));
 
-   [&]() -> cr::DetachedHandle {
+   [](auto * ch, bool & done) -> cr::DetachedHandle {
       auto result = co_await ch->Next();
       EXPECT_EQ(42, *result);
       done = true;
-   }();
+   }(ch.get(), done);
 
    EXPECT_TRUE(done);
 }
@@ -69,11 +69,13 @@ TEST_F(UnichannelFixture, unichannel_immediate_receive_then_send)
    ImmediateChannel::Producer prod(ch);
    bool done = false;
 
-   [&]() -> cr::DetachedHandle {
+   [](auto * ch, bool & done) -> cr::DetachedHandle {
       auto result = co_await ch->Next();
       EXPECT_EQ(42, *result);
       done = true;
-   }();
+   }(ch.get(), done);
+
+   EXPECT_FALSE(done);
 
    prod.Send(std::make_unique<int>(42));
 
@@ -143,10 +145,12 @@ TEST_F(UnichannelFixture, unichannel_immediate_receive_without_sending)
    ImmediateChannel::Producer prod(ch);
    bool done = false;
 
-   [&]() -> cr::DetachedHandle {
+   [](auto * ch, bool & done) -> cr::DetachedHandle {
       EXPECT_THROW({ auto result = co_await ch->Next(); }, cr::CanceledException);
       done = true;
-   }();
+   }(ch.get(), done);
+
+   EXPECT_FALSE(done);
 
    ch.reset();
    EXPECT_TRUE(done);
@@ -233,7 +237,7 @@ TEST_F(UnichannelFixture, unichannel_immediate_preserves_send_order)
    EXPECT_TRUE(prod.Send(std::make_unique<int>(43)));
    EXPECT_TRUE(prod.Send(std::make_unique<int>(44)));
 
-   [ch = ch.get(), &done]() -> cr::DetachedHandle {
+   [](auto * ch, bool & done) -> cr::DetachedHandle {
       {
          auto result = co_await ch->Next();
          EXPECT_EQ(42, *result);
@@ -253,7 +257,7 @@ TEST_F(UnichannelFixture, unichannel_immediate_preserves_send_order)
          },
          cr::CanceledException);
       done = true;
-   }();
+   }(ch.get(), done);
 
    ch.reset();
    EXPECT_TRUE(done);
