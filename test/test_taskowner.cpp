@@ -1,7 +1,7 @@
 #undef NDEBUG
 #include <gtest/gtest.h>
 
-#include "crhandle/task.hpp"
+#include "crhandle/taskhandle.hpp"
 #include "crhandle/taskowner.hpp"
 
 #include <optional>

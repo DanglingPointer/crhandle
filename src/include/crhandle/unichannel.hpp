@@ -1,7 +1,7 @@
 #ifndef UNICHANNEL_HPP
 #define UNICHANNEL_HPP
 
-#include "crhandle/task.hpp"
+#include "crhandle/taskhandle.hpp"
 
 #include <cassert>
 #include <deque>

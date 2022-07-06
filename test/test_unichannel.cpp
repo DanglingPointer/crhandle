@@ -1,6 +1,7 @@
 #undef NDEBUG
 #include <gtest/gtest.h>
 
+#include "crhandle/detachedhandle.hpp"
 #include "crhandle/unichannel.hpp"
 #include "dispatcher.hpp"
 

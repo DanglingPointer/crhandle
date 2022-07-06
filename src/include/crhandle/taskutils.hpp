@@ -1,7 +1,7 @@
 #ifndef TASKUTILS_HPP
 #define TASKUTILS_HPP
 
-#include "crhandle/task.hpp"
+#include "crhandle/taskhandle.hpp"
 
 #include <array>
 #include <optional>

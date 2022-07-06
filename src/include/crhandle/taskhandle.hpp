@@ -1,5 +1,5 @@
-#ifndef TASK_HPP
-#define TASK_HPP
+#ifndef TASKHANDLE_HPP
+#define TASKHANDLE_HPP
 
 #include "crhandle/coroutine.hpp"
 
@@ -70,18 +70,11 @@ concept Executor =
 
 namespace internal {
 
-struct DetachedPromise;
-
 template <TaskResult T, Executor E>
 struct Promise;
 } // namespace internal
 
 // clang-format on
-
-struct DetachedHandle
-{
-   using promise_type = internal::DetachedPromise;
-};
 
 struct CanceledException : std::exception
 {
@@ -111,25 +104,6 @@ private:
 
 
 namespace internal {
-
-struct DetachedPromise
-{
-   DetachedHandle get_return_object() const noexcept { return {}; }
-   stdcr::suspend_never initial_suspend() const noexcept { return {}; }
-   stdcr::suspend_never final_suspend() const noexcept { return {}; }
-   void unhandled_exception() const { throw; }
-   void return_void() noexcept {}
-   template <Awaiter A>
-   decltype(auto) await_transform(A && a)
-   {
-      return std::forward<A>(a);
-   }
-   template <TaskResult T, Executor E>
-   auto await_transform(TaskHandle<T, E> && handle)
-   {
-      return handle.Run();
-   }
-};
 
 template <TaskResult T>
 struct ValueHolder

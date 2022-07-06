@@ -1,7 +1,7 @@
 #ifndef TASK_OWNER_HPP
 #define TASK_OWNER_HPP
 
-#include "crhandle/task.hpp"
+#include "crhandle/taskhandle.hpp"
 
 #include <vector>
 
