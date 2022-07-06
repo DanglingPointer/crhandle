@@ -232,4 +232,192 @@ TEST_F(TaskUtilsFixture, anyof_cancels_inner_tasks)
    EXPECT_FALSE(state2.done);
 }
 
+TEST_F(TaskUtilsFixture, allof_delivers_all_results)
+{
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+   } state1, state2;
+
+   static auto IntegerTask = [](State & s) -> cr::TaskHandle<int> {
+      co_await Awaitable<State>{s};
+      co_return 42;
+   };
+   static auto StringTask = [](State & s) -> cr::TaskHandle<std::string> {
+      co_await Awaitable<State>{s};
+      co_return "Hello World";
+   };
+   static auto ImmediateTask = []() -> cr::TaskHandle<double> {
+      co_return 3.14;
+   };
+
+   std::optional<std::tuple<int, std::string, double>> result;
+
+   auto OuterTask = [&]() -> cr::DetachedHandle {
+      result.emplace(co_await cr::AllOf(IntegerTask(state1), StringTask(state2), ImmediateTask()));
+   };
+
+   OuterTask();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_FALSE(result);
+
+   state2.handle.resume();
+   EXPECT_FALSE(result);
+
+   state1.handle.resume();
+   EXPECT_TRUE(result);
+   EXPECT_STREQ("Hello World", std::get<std::string>(*result).c_str());
+   EXPECT_EQ(42, std::get<int>(*result));
+   EXPECT_EQ(3.14, std::get<double>(*result));
+}
+
+TEST_F(TaskUtilsFixture, allof_handles_void_tasks)
+{
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+      bool done = false;
+   } state1, state2;
+
+   std::optional<std::tuple<std::monostate, std::monostate>> result;
+
+   static auto VoidTask = [](State & s) -> cr::TaskHandle<void> {
+      co_await Awaitable<State>{s};
+      s.done = true;
+   };
+
+   auto OuterTask = [&]() -> cr::DetachedHandle {
+      auto ret = co_await cr::AllOf(VoidTask(state1), VoidTask(state2));
+      result.emplace(std::move(ret));
+   };
+
+   OuterTask();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_FALSE(state1.done);
+   EXPECT_FALSE(state2.done);
+   EXPECT_FALSE(result);
+
+   state1.handle.resume();
+   EXPECT_TRUE(state1.done);
+   EXPECT_FALSE(state2.done);
+   EXPECT_FALSE(result);
+
+   state2.handle.resume();
+   EXPECT_TRUE(state1.done);
+   EXPECT_TRUE(state2.done);
+   EXPECT_TRUE(result);
+}
+
+TEST_F(TaskUtilsFixture, allof_handles_immediate_tasks)
+{
+   static auto IntegerTask = []() -> cr::TaskHandle<int> {
+      co_return 42;
+   };
+   static auto StringTask = []() -> cr::TaskHandle<std::string> {
+      co_return "Hello World";
+   };
+
+   std::optional<std::tuple<std::string, int, std::string>> result;
+
+   auto OuterTask = [&]() -> cr::DetachedHandle {
+      auto ret = co_await cr::AllOf(StringTask(), IntegerTask(), StringTask());
+      result.emplace(std::move(ret));
+   };
+
+   OuterTask();
+   EXPECT_TRUE(result);
+   EXPECT_STREQ("Hello World", std::get<0>(*result).c_str());
+   EXPECT_EQ(42, std::get<1>(*result));
+   EXPECT_STREQ("Hello World", std::get<2>(*result).c_str());
+}
+
+TEST_F(TaskUtilsFixture, allof_uses_provided_executor_instance)
+{
+   ManualDispatcher dispatcher;
+
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+      bool done = false;
+   } state1, state2;
+
+   std::optional<std::tuple<std::monostate, std::monostate>> result;
+
+   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      co_await Awaitable<State>{s};
+      s.done = true;
+   };
+   static auto OuterTask = [](State & state1,
+                              State & state2,
+                              auto & result) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      auto ret = co_await cr::AllOf(VoidTask(state1), VoidTask(state2));
+      result.emplace(std::move(ret));
+   };
+
+   auto handle = OuterTask(state1, state2, result);
+   handle.Run(ManualDispatcher::Executor{&dispatcher});
+   EXPECT_FALSE(state1.handle);
+   EXPECT_FALSE(state2.handle);
+
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_FALSE(state1.done);
+   EXPECT_FALSE(state2.done);
+   EXPECT_FALSE(result);
+
+   state2.handle.resume();
+   dispatcher.ProcessAll();
+   EXPECT_FALSE(state1.done);
+   EXPECT_TRUE(state2.done);
+   EXPECT_FALSE(result);
+
+   state1.handle.resume();
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.done);
+   EXPECT_TRUE(state2.done);
+   EXPECT_TRUE(result);
+}
+
+TEST_F(TaskUtilsFixture, allof_cancels_inner_tasks)
+{
+   ManualDispatcher dispatcher;
+
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+      bool done = false;
+   } state1, state2;
+
+   std::optional<std::tuple<std::monostate, std::monostate>> result;
+
+   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      co_await Awaitable<State>{s};
+      s.done = true;
+   };
+   static auto OuterTask = [](State & state1,
+                              State & state2,
+                              auto & result) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      auto ret = co_await cr::AllOf(VoidTask(state1), VoidTask(state2));
+      result.emplace(std::move(ret));
+   };
+
+   auto handle = OuterTask(state1, state2, result);
+   handle.Run(ManualDispatcher::Executor{&dispatcher});
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_FALSE(result);
+
+   handle = {};
+   state1.handle.resume();
+   state2.handle.resume();
+   dispatcher.ProcessAll();
+   EXPECT_FALSE(result);
+   EXPECT_FALSE(state1.done);
+   EXPECT_FALSE(state2.done);
+}
+
 } // namespace
