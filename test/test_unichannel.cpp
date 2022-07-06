@@ -5,6 +5,9 @@
 #include "crhandle/unichannel.hpp"
 #include "dispatcher.hpp"
 
+#include <concepts>
+#include <type_traits>
+
 namespace {
 
 struct UnichannelFixture : public ::testing::Test
@@ -16,6 +19,29 @@ struct UnichannelFixture : public ::testing::Test
 
    ManualDispatcher dispatcher;
 };
+
+TEST_F(UnichannelFixture, unichannel_static_properties)
+{
+#ifdef __clang__
+   static_assert(!std::is_default_constructible_v<ImmediateChannel>);
+   static_assert(!std::is_default_constructible_v<StepwiseChannel>);
+
+   static_assert(std::is_move_constructible_v<ImmediateChannel::Producer>);
+   static_assert(std::is_move_constructible_v<StepwiseChannel::Producer>);
+
+   static_assert(std::is_copy_constructible_v<ImmediateChannel::Producer>);
+   static_assert(std::is_copy_constructible_v<StepwiseChannel::Producer>);
+#else
+   static_assert(!std::default_initializable<ImmediateChannel>);
+   static_assert(!std::default_initializable<StepwiseChannel>);
+
+   static_assert(std::move_constructible<ImmediateChannel::Producer>);
+   static_assert(std::move_constructible<StepwiseChannel::Producer>);
+
+   static_assert(std::copy_constructible<ImmediateChannel::Producer>);
+   static_assert(std::copy_constructible<StepwiseChannel::Producer>);
+#endif
+}
 
 TEST_F(UnichannelFixture, unichannel_immediate_send_then_receive)
 {
