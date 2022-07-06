@@ -148,6 +148,10 @@ struct Promise
    const bool * parentCanceled = nullptr;
    stdcr::coroutine_handle<> parentHandle = nullptr;
 
+   const bool & CancelationFlag() const noexcept
+   {
+      return parentCanceled ? *parentCanceled : canceled;
+   }
    const E & Executor() const noexcept { return static_cast<const E &>(*this); }
    E & Executor() noexcept { return static_cast<E &>(*this); }
 
@@ -168,9 +172,7 @@ struct Promise
    auto await_transform(TaskHandle<R, E> && innerTask) const
    {
       using InnerAwaiter = std::remove_reference_t<decltype(innerTask.Run())>;
-      return CancelingAwaiter<InnerAwaiter>{
-         innerTask.Run(Executor(), parentCanceled ? parentCanceled : &canceled),
-         *this};
+      return CancelingAwaiter<InnerAwaiter>{innerTask.Run(Executor(), &CancelationFlag()), *this};
    }
 
    auto initial_suspend() noexcept

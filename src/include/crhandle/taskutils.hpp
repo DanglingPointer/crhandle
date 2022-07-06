@@ -11,17 +11,19 @@ namespace cr {
 
 namespace internal {
 
+template <typename P = void>
 struct CurrentHandleRetriever
 {
-   stdcr::coroutine_handle<> handle;
+   stdcr::coroutine_handle<P> handle;
 
    bool await_ready() const noexcept { return false; }
-   bool await_suspend(stdcr::coroutine_handle<> h) noexcept
+   template <typename T = P>
+   bool await_suspend(stdcr::coroutine_handle<T> h) noexcept
    {
       handle = h;
       return false;
    }
-   stdcr::coroutine_handle<> await_resume() const noexcept { return handle; }
+   stdcr::coroutine_handle<P> await_resume() const noexcept { return handle; }
 };
 
 template <typename F, typename T, size_t... Is>
@@ -53,15 +55,16 @@ struct NonVoid<C<Ts...>>
 
 } // namespace internal
 
-
 template <typename T>
 using NonVoid = typename internal::NonVoid<T>::Type;
 
 template <Executor E, TaskResult... Rs>
 TaskHandle<NonVoid<std::variant<Rs...>>, E> AnyOf(TaskHandle<Rs, E>... ts)
 {
+   using ThisTaskHandle = TaskHandle<NonVoid<std::variant<Rs...>>, E>;
+
    std::optional<NonVoid<std::variant<Rs...>>> ret;
-   stdcr::coroutine_handle<> thisHandle = nullptr;
+   stdcr::coroutine_handle<> continuation = nullptr;
 
    auto TaskWrapper = [&]<size_t I, typename R>(std::in_place_index_t<I> i,
                                                 TaskHandle<R, E> task) -> TaskHandle<void, E> {
@@ -75,19 +78,23 @@ TaskHandle<NonVoid<std::variant<Rs...>>, E> AnyOf(TaskHandle<Rs, E>... ts)
          R tmp = co_await std::move(task);
          ret.emplace(i, std::move(tmp));
       }
-      if (thisHandle)
-         thisHandle.resume();
+      if (continuation)
+         continuation.resume();
    };
 
    auto handles = internal::CreateArray(std::make_index_sequence<sizeof...(Rs)>{},
                                         std::forward_as_tuple(std::move(ts)...),
                                         TaskWrapper);
 
+   auto thisHandle =
+      co_await internal::CurrentHandleRetriever<typename ThisTaskHandle::promise_type>{};
+   const auto & thisPromise = thisHandle.promise();
+
    for (auto & h : handles)
-      h.Run();
+      h.Run(thisPromise.Executor(), &thisPromise.CancelationFlag());
 
    if (!ret.has_value()) {
-      thisHandle = co_await internal::CurrentHandleRetriever{};
+      continuation = thisHandle;
       co_await stdcr::suspend_always{};
    }
 

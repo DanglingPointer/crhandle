@@ -4,6 +4,7 @@
 #include "crhandle/detachedhandle.hpp"
 #include "crhandle/taskhandle.hpp"
 #include "crhandle/taskutils.hpp"
+#include "dispatcher.hpp"
 
 #include <optional>
 
@@ -150,6 +151,85 @@ TEST_F(TaskUtilsFixture, anyof_handles_immediate_task_and_short_circuits)
    EXPECT_FALSE(state2.handle);
    EXPECT_FALSE(stringResult1.has_value());
    EXPECT_FALSE(stringResult2.has_value());
+}
+
+TEST_F(TaskUtilsFixture, anyof_uses_provided_executor_instance)
+{
+   ManualDispatcher dispatcher;
+
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+   } state1, state2;
+   size_t index = std::numeric_limits<size_t>::max();
+
+   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      co_await Awaitable<State>{s};
+   };
+   static auto OuterTask = [](State & state1,
+                              State & state2,
+                              size_t & index) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      auto result = co_await cr::AnyOf(VoidTask(state1), VoidTask(state2));
+      index = result.index();
+   };
+
+   auto handle = OuterTask(state1, state2, index);
+   handle.Run(ManualDispatcher::Executor{&dispatcher});
+   EXPECT_FALSE(state1.handle);
+   EXPECT_FALSE(state2.handle);
+
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
+
+   state2.handle.resume();
+   EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
+
+   dispatcher.ProcessAll();
+   EXPECT_EQ(1u, index);
+
+   state1.handle.resume();
+   dispatcher.ProcessAll();
+   EXPECT_EQ(1u, index);
+}
+
+TEST_F(TaskUtilsFixture, anyof_cancels_inner_tasks)
+{
+   ManualDispatcher dispatcher;
+
+   struct State
+   {
+      stdcr::coroutine_handle<> handle = nullptr;
+      bool done = false;
+   } state1, state2;
+   size_t index = std::numeric_limits<size_t>::max();
+
+   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      co_await Awaitable<State>{s};
+      s.done = true;
+   };
+   static auto OuterTask = [](State & state1,
+                              State & state2,
+                              size_t & index) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      auto result = co_await cr::AnyOf(VoidTask(state1), VoidTask(state2));
+      index = result.index();
+   };
+
+   auto handle = OuterTask(state1, state2, index);
+   handle.Run(ManualDispatcher::Executor{&dispatcher});
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.handle);
+   EXPECT_TRUE(state2.handle);
+   EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
+
+   handle = {};
+   state1.handle.resume();
+   state2.handle.resume();
+   dispatcher.ProcessAll();
+   EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
+   EXPECT_FALSE(state1.done);
+   EXPECT_FALSE(state2.done);
 }
 
 } // namespace

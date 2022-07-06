@@ -55,6 +55,12 @@ struct ManualDispatcher
       return true;
    }
 
+   void ProcessAll()
+   {
+      while (ProcessOneTask())
+         ;
+   }
+
    std::deque<Task> queue;
 };
 
