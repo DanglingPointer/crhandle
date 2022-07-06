@@ -21,6 +21,7 @@ struct CurrentHandleRetriever
    template <typename T = P>
    bool await_suspend(stdcr::coroutine_handle<T> h) noexcept
    {
+      static_assert(std::is_same_v<T, P> || std::is_same_v<void, P>);
       handle = h;
       return false;
    }
@@ -38,6 +39,7 @@ std::tuple<Ts...> ToNonOptional(std::tuple<std::optional<Ts>...> && t)
 {
    return std::apply(
       [](auto &&... opt) {
+         assert((... && opt.has_value()));
          return std::tuple{*std::move(opt)...};
       },
       std::move(t));
@@ -66,6 +68,12 @@ struct NonVoid<void>
 };
 
 } // namespace internal
+
+template <typename P = void>
+cr::Awaiter auto CurrentHandle() noexcept
+{
+   return internal::CurrentHandleRetriever<P>{};
+}
 
 template <typename T>
 using NonVoid = typename internal::NonVoid<T>::Type;
@@ -101,8 +109,7 @@ struct AnyOfFn
                                           std::forward_as_tuple(std::move(ts)...),
                                           TaskWrapper);
 
-      auto thisHandle =
-         co_await internal::CurrentHandleRetriever<typename HandleType<E, Rs...>::promise_type>{};
+      auto thisHandle = co_await CurrentHandle<typename HandleType<E, Rs...>::promise_type>();
       const auto & thisPromise = thisHandle.promise();
 
       for (auto & h : tasks)
@@ -147,8 +154,7 @@ struct AllOfFn
                                           std::forward_as_tuple(std::move(ts)...),
                                           TaskWrapper);
 
-      auto thisHandle =
-         co_await internal::CurrentHandleRetriever<typename HandleType<E, Rs...>::promise_type>{};
+      auto thisHandle = co_await CurrentHandle<typename HandleType<E, Rs...>::promise_type>();
       const auto & thisPromise = thisHandle.promise();
 
       for (auto & h : tasks)

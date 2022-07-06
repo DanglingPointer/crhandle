@@ -22,6 +22,18 @@ struct TaskUtilsFixture : public ::testing::Test
    };
 };
 
+TEST_F(TaskUtilsFixture, handle_retriever_converts_to_void_handle)
+{
+   stdcr::coroutine_handle<> handle;
+
+   static auto Foo = [](stdcr::coroutine_handle<> & out) -> cr::TaskHandle<void> {
+      out = co_await cr::CurrentHandle();
+   };
+   auto task = Foo(handle);
+   task.Run();
+   EXPECT_TRUE(handle.done());
+}
+
 TEST_F(TaskUtilsFixture, anyof_delivers_first_result_and_ignores_others)
 {
    struct State
