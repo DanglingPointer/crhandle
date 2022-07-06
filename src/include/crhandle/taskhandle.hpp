@@ -130,7 +130,7 @@ struct ValueHolder<void>
 template <TaskResult T, Executor E>
 struct Promise
    : public ValueHolder<T>
-   , public E
+   , private E
 {
    template <Awaiter A>
    struct CancelingAwaiter : A
