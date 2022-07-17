@@ -1,6 +1,7 @@
 #undef NDEBUG
 #include <gtest/gtest.h>
 
+#include "counter.hpp"
 #include "crhandle/detachedhandle.hpp"
 #include "crhandle/taskhandle.hpp"
 #include "crhandle/taskutils.hpp"
@@ -206,7 +207,7 @@ TEST_F(TaskUtilsFixture, anyof_uses_provided_executor_instance)
    EXPECT_EQ(1u, index);
 }
 
-TEST_F(TaskUtilsFixture, anyof_cancels_inner_tasks)
+TEST_F(TaskUtilsFixture, anyof_cancelation_doesnt_leak_memory)
 {
    ManualDispatcher dispatcher;
 
@@ -215,33 +216,41 @@ TEST_F(TaskUtilsFixture, anyof_cancels_inner_tasks)
       stdcr::coroutine_handle<> handle = nullptr;
       bool done = false;
    } state1, state2;
+
+   int count = 0;
+
    size_t index = std::numeric_limits<size_t>::max();
 
-   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+   static auto VoidTask = [](State & s,
+                             Counter counter) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      (void)counter;
       co_await Awaitable<State>{s};
       s.done = true;
    };
    static auto OuterTask = [](State & state1,
                               State & state2,
+                              Counter counter,
                               size_t & index) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
-      auto result = co_await cr::AnyOf(VoidTask(state1), VoidTask(state2));
+      auto result = co_await cr::AnyOf(VoidTask(state1, counter), VoidTask(state2, counter));
       index = result.index();
    };
 
-   auto handle = OuterTask(state1, state2, index);
+   auto handle = OuterTask(state1, state2, Counter(count), index);
    handle.Run(ManualDispatcher::Executor{&dispatcher});
    dispatcher.ProcessAll();
    EXPECT_TRUE(state1.handle);
    EXPECT_TRUE(state2.handle);
    EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
+   EXPECT_LE(3, count);
 
    handle = {};
    state1.handle.resume();
    state2.handle.resume();
    dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.done);
+   EXPECT_TRUE(state2.done);
    EXPECT_EQ(std::numeric_limits<size_t>::max(), index);
-   EXPECT_FALSE(state1.done);
-   EXPECT_FALSE(state2.done);
+   EXPECT_EQ(0, count);
 }
 
 TEST_F(TaskUtilsFixture, allof_delivers_all_results)
@@ -393,7 +402,7 @@ TEST_F(TaskUtilsFixture, allof_uses_provided_executor_instance)
    EXPECT_TRUE(result);
 }
 
-TEST_F(TaskUtilsFixture, allof_cancels_inner_tasks)
+TEST_F(TaskUtilsFixture, allof_cancelation_doesnt_leak_memory)
 {
    ManualDispatcher dispatcher;
 
@@ -403,33 +412,40 @@ TEST_F(TaskUtilsFixture, allof_cancels_inner_tasks)
       bool done = false;
    } state1, state2;
 
+   int count = 0;
+
    std::optional<std::tuple<std::monostate, std::monostate>> result;
 
-   static auto VoidTask = [](State & s) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+   static auto VoidTask = [](State & s,
+                             Counter counter) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
+      (void)counter;
       co_await Awaitable<State>{s};
       s.done = true;
    };
    static auto OuterTask = [](State & state1,
                               State & state2,
+                              Counter counter,
                               auto & result) -> cr::TaskHandle<void, ManualDispatcher::Executor> {
-      auto ret = co_await cr::AllOf(VoidTask(state1), VoidTask(state2));
+      auto ret = co_await cr::AllOf(VoidTask(state1, counter), VoidTask(state2, counter));
       result.emplace(std::move(ret));
    };
 
-   auto handle = OuterTask(state1, state2, result);
+   auto handle = OuterTask(state1, state2, Counter(count), result);
    handle.Run(ManualDispatcher::Executor{&dispatcher});
    dispatcher.ProcessAll();
    EXPECT_TRUE(state1.handle);
    EXPECT_TRUE(state2.handle);
    EXPECT_FALSE(result);
+   EXPECT_LE(3, count);
 
    handle = {};
    state1.handle.resume();
    state2.handle.resume();
    dispatcher.ProcessAll();
+   EXPECT_TRUE(state1.done);
+   EXPECT_TRUE(state2.done);
    EXPECT_FALSE(result);
-   EXPECT_FALSE(state1.done);
-   EXPECT_FALSE(state2.done);
+   EXPECT_EQ(0, count);
 }
 
 } // namespace
