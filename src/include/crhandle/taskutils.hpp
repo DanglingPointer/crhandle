@@ -113,7 +113,7 @@ struct AnyOfFn
       const auto & thisPromise = thisHandle.promise();
 
       for (auto & h : tasks)
-         h.Run(thisPromise.Executor(), &thisPromise.CancelationFlag());
+         h.Run(thisPromise.Executor());
 
       if (!ret.has_value()) {
          continuation = thisHandle;
@@ -158,7 +158,7 @@ struct AllOfFn
       const auto & thisPromise = thisHandle.promise();
 
       for (auto & h : tasks)
-         h.Run(thisPromise.Executor(), &thisPromise.CancelationFlag());
+         h.Run(thisPromise.Executor());
 
       if (!internal::AllValuesSet(ret)) {
          continuation = thisHandle;

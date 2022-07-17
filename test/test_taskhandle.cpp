@@ -1,6 +1,7 @@
 #undef NDEBUG
 #include <gtest/gtest.h>
 
+#include "counter.hpp"
 #include "crhandle/detachedhandle.hpp"
 #include "crhandle/taskhandle.hpp"
 
@@ -8,23 +9,6 @@
 #include <optional>
 
 namespace {
-
-struct Counter
-{
-   int & count;
-
-   Counter(int & counter)
-      : count(counter)
-   {
-      ++count;
-   }
-   Counter(const Counter & other)
-      : count(other.count)
-   {
-      ++count;
-   }
-   ~Counter() { --count; }
-};
 
 struct DetachedTaskFixture : public ::testing::Test
 {
