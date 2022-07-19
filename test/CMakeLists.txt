@@ -25,9 +25,9 @@ target_link_libraries(crhandletests
 
 include(GoogleTest)
 
-if(MSVC)
-    gtest_discover_tests(crhandletests
-            TEST_FILTER -*anyof*)
-else()
+#if(MSVC)
+#    gtest_discover_tests(crhandletests
+#            TEST_FILTER -*anyof*)
+#else()
     gtest_discover_tests(crhandletests)
-endif()
+#endif()

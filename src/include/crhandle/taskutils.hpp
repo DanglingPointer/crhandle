@@ -78,8 +78,12 @@ struct AnyOfFn
       std::optional<std::variant<NonVoid<Rs>...>> ret;
       stdcr::coroutine_handle<> continuation = nullptr;
 
-      auto TaskWrapper = [&]<size_t I, typename R>(std::in_place_index_t<I> i,
-                                                   TaskHandle<R, E> task) -> TaskHandle<void, E> {
+      static_assert(std::is_reference_v<decltype(ret) &>);
+
+      auto ChildTask = []<size_t I, typename R>(decltype(ret) & ret,
+                                                decltype(continuation) & continuation,
+                                                std::in_place_index_t<I> i,
+                                                TaskHandle<R, E> task) -> TaskHandle<void, E> {
          if (ret.has_value())
             co_return;
 
@@ -94,9 +98,16 @@ struct AnyOfFn
             continuation.resume();
       };
 
+      auto ChildTaskWrapper = [&](auto && index, auto && task) {
+         return ChildTask(ret,
+                          continuation,
+                          std::forward<decltype(index)>(index),
+                          std::forward<decltype(task)>(task));
+      };
+
       auto tasks = internal::TupleToArray(std::make_index_sequence<sizeof...(Rs)>{},
                                           std::forward_as_tuple(std::move(ts)...),
-                                          TaskWrapper);
+                                          ChildTaskWrapper);
 
       auto thisHandle = co_await CurrentHandle<typename HandleType<E, Rs...>::promise_type>();
       const auto & thisPromise = thisHandle.promise();
