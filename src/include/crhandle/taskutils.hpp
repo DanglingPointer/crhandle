@@ -109,6 +109,9 @@ struct AnyOfFn
          co_await stdcr::suspend_always{};
       }
 
+      for (auto & h : tasks)
+         h = {};
+
       co_return *ret;
    }
 };
