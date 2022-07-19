@@ -3,7 +3,7 @@
 
 #include <version>
 
-#ifdef _LIBCPP_VERSION
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION < 13000
 
 #include <experimental/coroutine>
 

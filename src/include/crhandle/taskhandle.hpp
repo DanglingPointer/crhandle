@@ -143,6 +143,8 @@ struct Promise
          return A::await_resume();
       }
    };
+   template <Awaiter A>
+   CancelingAwaiter(A &&, const Promise &) -> CancelingAwaiter<std::remove_reference_t<A>>;
 
    bool canceled = false;
    const bool * parentCanceled = nullptr;
@@ -165,35 +167,16 @@ struct Promise
    template <Awaiter A>
    auto await_transform(A && awaiter) const
    {
-      return CancelingAwaiter<std::remove_reference_t<A>>{std::forward<A>(awaiter), *this};
+      return CancelingAwaiter{std::forward<A>(awaiter), *this};
    }
 
    template <TaskResult R>
    auto await_transform(TaskHandle<R, E> && innerTask) const
    {
-      using InnerAwaiter = std::remove_reference_t<decltype(innerTask.Run())>;
-      return CancelingAwaiter<InnerAwaiter>{innerTask.Run(Executor(), &CancelationFlag()), *this};
+      return CancelingAwaiter{innerTask.Run(Executor(), &CancelationFlag()), *this};
    }
 
-   auto initial_suspend() noexcept
-   {
-#ifdef __clang__
-      struct CancelingSuspendAlways
-      {
-         const Promise & p;
-         bool await_ready() const noexcept { return false; }
-         void await_suspend(stdcr::coroutine_handle<>) const noexcept {}
-         void await_resume() const
-         {
-            if (p.canceled || (p.parentCanceled && *p.parentCanceled))
-               throw CanceledException{};
-         }
-      };
-      return CancelingSuspendAlways{*this};
-#else
-      return CancelingAwaiter<stdcr::suspend_always>{{}, *this};
-#endif
-   }
+   auto initial_suspend() noexcept { return CancelingAwaiter{stdcr::suspend_always{}, *this}; }
 
    auto final_suspend() noexcept
    {
