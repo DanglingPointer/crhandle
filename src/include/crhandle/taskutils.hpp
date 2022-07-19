@@ -6,6 +6,7 @@
 #include <array>
 #include <optional>
 #include <tuple>
+#include <type_traits>
 #include <variant>
 
 namespace cr {
@@ -55,18 +56,6 @@ bool AllValuesSet(const std::tuple<std::optional<Ts>...> & t) noexcept
       t);
 }
 
-template <typename T>
-struct NonVoid
-{
-   using Type = T;
-};
-
-template <>
-struct NonVoid<void>
-{
-   using Type = std::monostate;
-};
-
 } // namespace internal
 
 template <typename P = void>
@@ -76,7 +65,7 @@ cr::Awaiter auto CurrentHandle() noexcept
 }
 
 template <typename T>
-using NonVoid = typename internal::NonVoid<T>::Type;
+using NonVoid = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
 
 struct AnyOfFn
 {
