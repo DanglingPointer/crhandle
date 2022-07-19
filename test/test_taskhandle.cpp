@@ -4,6 +4,7 @@
 #include "counter.hpp"
 #include "crhandle/detachedhandle.hpp"
 #include "crhandle/taskhandle.hpp"
+#include "dispatcher.hpp"
 
 #include <deque>
 #include <optional>
@@ -78,6 +79,15 @@ struct TaskHandleFixture : public ::testing::Test
       bool await_ready() { return false; }
       void await_suspend(stdcr::coroutine_handle<> h) { state.handle = h; }
       void await_resume() {}
+   };
+
+   template <typename S>
+   struct Canceler
+   {
+      S & state;
+      bool await_ready() { return false; }
+      void await_suspend(stdcr::coroutine_handle<> h) { state.handle = h; }
+      void await_resume() { throw cr::CanceledException(); }
    };
 };
 
@@ -627,6 +637,69 @@ TEST_F(TaskHandleFixture, eager_task_resumes_its_continuation)
 
    OuterVoidTask(value);
    EXPECT_EQ(42, value);
+}
+
+TEST_F(TaskHandleFixture, nested_lazy_tasks_can_be_canceled_top_down)
+{
+   using TaskType = cr::TaskHandle<void, ::ManualDispatcher::Executor>;
+
+   ::ManualDispatcher dispatcher;
+
+   struct State
+   {
+      bool beforeSuspend = false;
+      bool afterSuspend = false;
+      stdcr::coroutine_handle<> handle = nullptr;
+   } state;
+
+   static auto InnerTask = [](State & state) -> TaskType {
+      co_await Canceler<State>{state};
+   };
+
+   static auto OuterTask = [](State & state) -> TaskType {
+      state.beforeSuspend = true;
+      co_await InnerTask(state);
+      state.afterSuspend = true;
+   };
+
+   auto task = OuterTask(state);
+   task.Run(dispatcher.GetExecutor());
+   dispatcher.ProcessAll();
+   EXPECT_TRUE(state.handle);
+   EXPECT_TRUE(state.beforeSuspend);
+   EXPECT_FALSE(state.afterSuspend);
+   EXPECT_TRUE(task);
+
+   state.handle.resume();
+   EXPECT_TRUE(state.handle.done());
+
+   EXPECT_TRUE(dispatcher.ProcessOneTask());
+   EXPECT_FALSE(dispatcher.ProcessOneTask());
+   EXPECT_FALSE(state.afterSuspend);
+   EXPECT_FALSE(task);
+}
+
+TEST_F(TaskHandleFixture, nested_eager_tasks_can_be_canceled_top_down)
+{
+   struct ImmediateCanceler
+   {
+      bool await_ready() { return true; }
+      void await_suspend(stdcr::coroutine_handle<>) {}
+      void await_resume() { throw cr::CanceledException(); }
+   };
+
+   static auto InnerTask = []() -> cr::TaskHandle<void> {
+      co_await ImmediateCanceler{};
+   };
+
+   static auto OuterTask = []() -> cr::TaskHandle<void> {
+      co_await InnerTask();
+   };
+
+   auto task = OuterTask();
+   EXPECT_TRUE(task);
+   task.Run();
+   EXPECT_FALSE(task);
 }
 
 } // namespace

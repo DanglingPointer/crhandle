@@ -45,6 +45,8 @@ struct ManualDispatcher
       }
    };
 
+   Executor GetExecutor() { return Executor{this}; }
+
    bool ProcessOneTask()
    {
       if (queue.empty())
